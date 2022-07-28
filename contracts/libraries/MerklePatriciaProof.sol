@@ -18,11 +18,7 @@ library MerklePatriciaProof {
      * @param root The root hash of the trie.
      * @return return code indicating result. Return code 0 indicates a positive verification
      */
-    event debug(string msg);
-    event _toTraverse(bytes encodedPath);
-    event index(uint i);
-    event ddb(bytes path);
-    function verify(bytes memory value, bytes memory encodedPath, bytes memory rlpParentNodes, bytes32 root) internal returns (uint code) {
+    function verify(bytes memory value, bytes memory encodedPath, bytes memory rlpParentNodes, bytes32 root) internal pure returns (uint code) {
         RLPReader.RLPItem memory item = RLPReader.toRlpItem(rlpParentNodes);
 
         // list of the rlp encoded proof nodes
@@ -40,12 +36,13 @@ library MerklePatriciaProof {
 
         // [8, 1, 8, 8]
         bytes memory path = _getNibbleArray(encodedPath);
+
         // path is empty - this is equal as
         if (path.length == 0) { return (1); }
 
         // iterate all the rlp encoded nodes in the proof
         for (uint i = 0; i < parentNodes.length; i++) {
-            emit index(i);
+
             // the actual path is longer than the given path - key not found
             if (pathPtr > path.length) { return (2); }
 
@@ -61,6 +58,7 @@ library MerklePatriciaProof {
 
             if (currentNodeList.length == 17) {
                 // branch node
+
                 // we reached at the given level
                 if (pathPtr == path.length) {
                     if (keccak256(RLPReader.toBytes(currentNodeList[16])) == keccak256(value)) {
@@ -71,6 +69,7 @@ library MerklePatriciaProof {
                 }
 
                 uint8 nextPathNibble = uint8(path[pathPtr]);
+
                 if (nextPathNibble > 16) {
                     return (5);
                 }
@@ -80,17 +79,18 @@ library MerklePatriciaProof {
                 pathPtr += 1;
             } else if (currentNodeList.length == 2) {
                 // extension or leaf node
-                uint toTraverse = _nibblesToTraverse(RLPReader.toBytes(currentNodeList[0]), path, pathPtr);
-                pathPtr += toTraverse;
+
+                pathPtr += _nibblesToTraverse(RLPReader.toBytes(currentNodeList[0]), path, pathPtr);
+
                 if (pathPtr == path.length) {//leaf node
-                    if (keccak256(RLPReader.toBytes(currentNodeList[1])) == keccak256(value)) { 
+                    if (keccak256(RLPReader.toBytes(currentNodeList[1])) == keccak256(value)) {
                         return (0);
                     } else {
                         return (6);
                     }
                 }
                 //extension node
-                if (toTraverse == 0) {
+                if (_nibblesToTraverse(RLPReader.toBytes(currentNodeList[0]), path, pathPtr) == 0) {
                     return (7);
                 }
 
@@ -100,7 +100,7 @@ library MerklePatriciaProof {
             }
         }
     }
-    
+
     function _nibblesToTraverse(bytes memory encodedPartialPath, bytes memory path, uint pathPtr) private pure returns (uint) {
         uint len;
         // encodedPartialPath has elements that are each two hex characters (1 byte), but partialPath
@@ -114,6 +114,7 @@ library MerklePatriciaProof {
             bytes1 pathNibble = path[i];
             slicedPath[i-pathPtr] = pathNibble;
         }
+
         if (keccak256(partialPath) == keccak256(slicedPath)) {
             len = partialPath.length;
         } else {
@@ -162,10 +163,8 @@ library MerklePatriciaProof {
      *@param Value of N
      *@param Bytes String
      *@return ByteString[N]
-
-     ACCEDO AD OGNI ELEMENTO NESIMO DEL ARRAY DI BYTES
      */
-    function _getNthNibbleOfBytes(uint n, bytes memory str) private pure  returns (bytes1) {
+    function _getNthNibbleOfBytes(uint n, bytes memory str) private pure returns (bytes1) {
         return bytes1(n%2==0 ? uint8(str[n/2])/0x10 : uint8(str[n/2])%0x10);
     }
 

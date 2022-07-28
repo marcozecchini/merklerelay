@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.9;
 
-library MerkleTree {
+library MerklePatriciaTree {
     
     function calculateMerkleTree(bytes32[] memory leaves)
         internal pure

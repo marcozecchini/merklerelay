@@ -8,7 +8,7 @@ const calculateBlockHash = (block) => {
 };
 
 const addToHex = (hexString, number) => {
-  return web3.utils.toHex((new BigNumber(hexString).plus(number)));
+  return Web3.utils.toHex((new BigNumber(hexString).plus(number)));
 };
 
 const createRLPHeader = (block) => {
@@ -20,8 +20,8 @@ const createRLPHeader = (block) => {
         block.transactionsRoot,
         block.receiptsRoot,
         block.logsBloom,
-        BigInt(block.difficulty),
-        BigInt(block.number),
+        BigInt(block.difficulty != undefined? block.difficulty: 0 ),
+        BigInt(block.number != undefined? block.number: 0),
         block.gasLimit,
         block.gasUsed,
         block.timestamp,
