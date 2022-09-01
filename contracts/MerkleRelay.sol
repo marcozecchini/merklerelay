@@ -102,11 +102,11 @@ contract MerkleRelay is MerkleRelayCore {
         emit NewRoot(newRootHash);
     }
 
-    function disputeBlockHeader(bytes calldata rlpHeader, bytes32[] calldata proof, bool[] calldata position, bytes calldata rlpParent, bytes32 root, bytes32 rootParent, PoWMetadata calldata powmetadata) public {
+    function disputeBlockHeader(bytes calldata rlpHeader, TreeProof calldata proofMeta, bytes calldata rlpParent, TreeProof calldata proofParentMeta, bytes32 root, bytes32 rootParent, PoWMetadata calldata powmetadata) public {
 
         //At first, we verify that the block belongs to the specified root
-        require(_verifyBlock(proof, position, rlpHeader, root), "disputed block not in root");
-        // require(_verifyBlock(proofParent, positionParent, rlpParent, root), "parent block not in root");
+        require(_verifyBlock(proofMeta, rlpHeader, root), "disputed block not in root");
+        require(_verifyBlock(proofParentMeta, rlpParent, rootParent), "parent block not in root");
 
         address[] memory submittersToPunish = disputeBlock(rlpHeader, rlpParent, powmetadata, root, rootParent);
 

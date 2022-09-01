@@ -67,6 +67,11 @@ contract MerkleRelayCore {
         uint[] dataSetLookup; ///contains elements of the DAG needed for the PoW verification
         uint[] witnessForLookup; /// needed for verifying the dataSetLookup
     }
+
+    struct TreeProof {
+       bytes32[] proof; 
+       bool[] position;
+    }
     
     uint64 maxForkId = 0;                           // current fork-id, is incrementing
     bytes32 longestChainEndpoint;                   // saves the hash of the block with the highest blockNr. (most PoW work)
@@ -330,12 +335,12 @@ contract MerkleRelayCore {
     }
 
     /// @dev This function verifies that a block belongs to one tree of the rootChain
-    function _verifyBlock(bytes32[] calldata proof, bool[] calldata position, bytes calldata blockHeader, bytes32 root)
+    function _verifyBlock(TreeProof calldata proofMeta, bytes calldata blockHeader, bytes32 root)
         internal view returns (bool success)
     {   
         success = false;
         require(isRootStored(root), "root is not stored");
-        success = MerkleTree.verifyProof(proof, position, keccak256(blockHeader), root);
+        success = MerkleTree.verifyProof(proofMeta.proof, proofMeta.position, keccak256(blockHeader), root);
         return success;
         
     }

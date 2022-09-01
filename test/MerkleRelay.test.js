@@ -337,7 +337,7 @@ contract('MerkleRelay', async(accounts) => {
 
                 let ret = await merklerelay.submitRoot(elements.map(Buffer.from), genesisBlock.hash, {
                     from: accounts[0],
-                    gas: 20000000,
+                    gas: 8000000,
                     gasPrice: GAS_PRICE_IN_WEI
                 });
                 
@@ -378,7 +378,7 @@ contract('MerkleRelay', async(accounts) => {
 
                     let ret = await merklerelay.submitRoot(elements.map(Buffer.from), parentHash, {
                         from: accounts[0],
-                        gas: 20000000,
+                        gas: 3000000,
                         gasPrice: GAS_PRICE_IN_WEI
                     });
                     
@@ -446,7 +446,7 @@ contract('MerkleRelay', async(accounts) => {
 
                 let ret = await merklerelay.submitRoot(elements.map(Buffer.from), parentHash, {
                     from: accounts[0],
-                    gas: 20000000,
+                    gas: 3000000,
                     gasPrice: GAS_PRICE_IN_WEI
                 });
                 
@@ -484,7 +484,7 @@ contract('MerkleRelay', async(accounts) => {
 
                 ret = await merklerelay.submitRoot(elements.map(Buffer.from), parentHash, {
                     from: accounts[0],
-                    gas: 20000000,
+                    gas: 3000000,
                     gasPrice: GAS_PRICE_IN_WEI
                 });
 
@@ -546,7 +546,7 @@ contract('MerkleRelay', async(accounts) => {
 
                 let ret = await merklerelay.submitRoot(elements.map(Buffer.from), parentHash, {
                     from: accounts[0],
-                    gas: 20000000,
+                    gas: 3000000,
                     gasPrice: GAS_PRICE_IN_WEI
                 });
                 
@@ -582,7 +582,7 @@ contract('MerkleRelay', async(accounts) => {
 
                 ret = await merklerelay.submitRoot(elementsBis.map(Buffer.from), parentHash, {
                     from: accounts[0],
-                    gas: 20000000,
+                    gas: 3000000,
                     gasPrice: GAS_PRICE_IN_WEI
                 });
                 
@@ -624,7 +624,7 @@ contract('MerkleRelay', async(accounts) => {
 
                 ret = await merklerelay.submitRoot(elements.map(Buffer.from), parentHash, {
                     from: accounts[0],
-                    gas: 20000000,
+                    gas: 3000000,
                     gasPrice: GAS_PRICE_IN_WEI
                 });
                 
@@ -734,7 +734,7 @@ contract('MerkleRelay', async(accounts) => {
 
             ret = await merklerelay.submitRoot(elements.map(Buffer.from), parentHash, {
                 from: accounts[0],
-                gas: 20000000,
+                gas: 3000000,
                 gasPrice: GAS_PRICE_IN_WEI
             });
             
@@ -752,12 +752,19 @@ contract('MerkleRelay', async(accounts) => {
             let position_array = proofSC.map((el,i)=> {return el.position});
             let data_array = proofSC.map((el, i) => {return el.data});
 
-            // function disputeBlockHeader(bytes calldata rlpHeader, bytes32[] calldata proof, bool[] calldata position, bytes calldata rlpParent, bytes32 root, uint[] memory dataSetLookup, uint[] memory witnessForLookup) public {
+            const blockProof = {proof: data_array, position: position_array};
 
-            ret = await merklerelay.disputeBlockHeader(createRLPHeader(block2), data_array, position_array, 
-                    createRLPHeader(block1), root, root, powMetadata, {
+            let parentProof = merkleTree.getProof(proofLeaves[0]);
+            let parentProofSC = parentProof.map((el, i) => {return el.position == 'right' ?  {position: true, data: el.data} : {position: false, data: el.data}}); 
+            let parent_position_array = parentProofSC.map((el,i)=> {return el.position});
+            let parent_data_array = parentProofSC.map((el, i) => {return el.data});
+
+            const blockParentProof = {proof: parent_data_array, position: parent_position_array};
+
+            ret = await merklerelay.disputeBlockHeader(createRLPHeader(block2), blockProof, 
+                    createRLPHeader(block1), blockParentProof, root, root, powMetadata, {
                 from: accounts[0],
-                gas: 20000000,
+                gas: 3000000,
                 gasPrice: GAS_PRICE_IN_WEI
             });
             expectEvent.inLogs(ret.logs, 'DisputeBlock', {returnCode: new BN(2)});
@@ -848,7 +855,7 @@ contract('MerkleRelay', async(accounts) => {
 
             ret = await merklerelay.submitRoot(elements.map(Buffer.from), parentHash, {
                 from: accounts[0],
-                gas: 20000000,
+                gas: 8000000,
                 gasPrice: GAS_PRICE_IN_WEI
             });
             
@@ -870,7 +877,7 @@ contract('MerkleRelay', async(accounts) => {
 
             ret = await merklerelay.submitRoot(elementsBis.map(Buffer.from), parentHash, {
                 from: accounts[0],
-                gas: 20000000,
+                gas: 3000000,
                 gasPrice: GAS_PRICE_IN_WEI
             });
             
@@ -888,13 +895,22 @@ contract('MerkleRelay', async(accounts) => {
             let position_array = proofSC.map((el,i)=> {return el.position});
             let data_array = proofSC.map((el, i) => {return el.data});
 
+            const blockProof = {proof: data_array, position: position_array};
 
-            ret = await merklerelay.disputeBlockHeader(createRLPHeader(block5), data_array, position_array, 
-                    createRLPHeader(block4), rootBis, root, powMetadata, {
+            let parentProof = merkleTree.getProof(proofLeaves[3]);
+            let parentProofSC = parentProof.map((el, i) => {return el.position == 'right' ?  {position: true, data: el.data} : {position: false, data: el.data}}); 
+            let parent_position_array = parentProofSC.map((el,i)=> {return el.position});
+            let parent_data_array = parentProofSC.map((el, i) => {return el.data});
+
+            const blockParentProof = {proof: parent_data_array, position: parent_position_array};
+
+            ret = await merklerelay.disputeBlockHeader(createRLPHeader(block5), blockProof, 
+                    createRLPHeader(block4), blockParentProof, rootBis, root, powMetadata, {
                 from: accounts[0],
-                gas: 20000000,
+                gas: 3000000,
                 gasPrice: GAS_PRICE_IN_WEI
             });
+
             expectEvent.inLogs(ret.logs, 'DisputeBlock', {returnCode: new BN(2)});
             
             expectedRoots.push(
@@ -921,6 +937,570 @@ contract('MerkleRelay', async(accounts) => {
             await withdrawStake(stakeAccount0, accounts[0]);
             await withdrawStake(stakeAccount1, accounts[1]);
         });
+
+        // Test Scenario 3 (verification of Ethash should fail between the parent belonging to 1):
+        //
+        // (0)---(1)-X-(2) <-- try to dispute a valid block
+        //
+        //
+        it('should correctly execute test scenario 3', async () => {
+            const requiredStakePerBlock = await merklerelay.getRequiredStakePerRoot();
+            const stakeAccount0 = requiredStakePerBlock.mul(new BN(2));
+            const stakeAccount1 = requiredStakePerBlock.mul(new BN(2));
+            await merklerelay.depositStake(stakeAccount0, {
+                from: accounts[0],
+                value: stakeAccount0,
+                gasPrice: GAS_PRICE_IN_WEI
+            });  // submits block 1
+
+            await merklerelay.depositStake(stakeAccount1, {
+                from: accounts[1],
+                value: stakeAccount1,
+                gasPrice: GAS_PRICE_IN_WEI
+            });  // submits blocks 2,3
+
+            let genesisBlock = (await mainWeb3.eth.getBlock(GENESIS_BLOCK));
+            let parentHash = genesisBlock.hash;
+
+            // Create expected chain
+            const block1 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 1);
+            const block2 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 2);
+            const block3 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 3);
+            const block4 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 4);
+            
+            const block5 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 5);
+            const block6 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 6);
+            const block7 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 7);
+            const block8 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 8);
+
+            let elements = [];
+            let expectedRoots = [];
+
+            // Add (1)
+            elements.push(createRLPHeader(block1));
+            elements.push(createRLPHeader(block2));
+            elements.push(createRLPHeader(block3));
+            elements.push(createRLPHeader(block4));
+
+                
+            const proofLeaves = elements.map(keccak256);
+            const merkleTree = new MerkleTree(proofLeaves, keccak256);
+            const root = merkleTree.getHexRoot();
+
+            ret = await merklerelay.submitRoot(elements.map(Buffer.from), parentHash, {
+                from: accounts[0],
+                gas: 3000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            
+            expectEvent.inLogs(ret.logs, 'NewRoot', {root: root});
+            parentHash = root;
+
+            // Add (2)
+            let elementsBis = [];
+            elementsBis.push(createRLPHeader(block5));
+            elementsBis.push(createRLPHeader(block6));
+            elementsBis.push(createRLPHeader(block7));
+            elementsBis.push(createRLPHeader(block8));
+
+                
+            const proofLeavesBis = elementsBis.map(keccak256);
+            const merkleTreeBis = new MerkleTree(proofLeavesBis, keccak256);
+            const rootBis = merkleTreeBis.getHexRoot();
+
+            ret = await merklerelay.submitRoot(elementsBis.map(Buffer.from), parentHash, {
+                from: accounts[0],
+                gas: 3000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            
+            expectEvent.inLogs(ret.logs, 'NewRoot', {root: rootBis});
+            submitTime = await time.latest();
+
+            const {
+                "DatasetLookUp":    dataSetLookupBlock2,
+                "WitnessForLookup": witnessForLookupBlock2,
+            } = require("./pow/genesisPlus88.json");
+
+            const powMetadata = {dataSetLookup: dataSetLookupBlock2, witnessForLookup: witnessForLookupBlock2};
+
+            let proof = merkleTreeBis.getProof(proofLeavesBis[0]);
+            let proofSC = proof.map((el, i) => {return el.position == 'right' ?  {position: true, data: el.data} : {position: false, data: el.data}}); 
+            let position_array = proofSC.map((el,i)=> {return el.position});
+            let data_array = proofSC.map((el, i) => {return el.data});
+
+            const blockProof = {proof: data_array, position: position_array};
+
+            let parentProof = merkleTree.getProof(proofLeaves[3]);
+            let parentProofSC = parentProof.map((el, i) => {return el.position == 'right' ?  {position: true, data: el.data} : {position: false, data: el.data}}); 
+            let parent_position_array = parentProofSC.map((el,i)=> {return el.position});
+            let parent_data_array = parentProofSC.map((el, i) => {return el.data});
+
+            const blockParentProof = {proof: parent_data_array, position: parent_position_array};
+
+            ret = await merklerelay.disputeBlockHeader(createRLPHeader(block5), blockProof, 
+                    createRLPHeader(block4), blockParentProof, rootBis, root, powMetadata, {
+                from: accounts[0],
+                gas: 3000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            expectEvent.inLogs(ret.logs, 'DisputeBlock', {returnCode: new BN(0)});
+            
+            expectedRoots.push(
+                {
+                    hash: rootBis,
+                    lastHash: '0x'+keccak256(elementsBis[elementsBis.length-1]).toString('hex'),
+                    number: (await mainWeb3.eth.getBlock(GENESIS_BLOCK+elements.length+elementsBis.length)).number,
+                    totalDifficulty: (await mainWeb3.eth.getBlock(GENESIS_BLOCK+elements.length+elementsBis.length)).totalDifficulty,
+                    lengthUpdate: elementsBis.length,
+                    forkId: 0,
+                    iterableIndex: 0,
+                    latestFork: "0x0000000000000000000000000000000000000000000000000000000000000000", // TODO is this correct?
+                    lockedUntil: submitTime.add(LOCK_PERIOD),
+                    submitter: accounts[0],
+                    successors: []
+                }
+            );
+
+            // Check
+            await checkExpectedEndpoints(expectedRoots);
+            await checkExpectedRoots(expectedRoots);
+
+            // withdraw stake
+            await withdrawStake(stakeAccount0, accounts[0]);
+            await withdrawStake(stakeAccount1, accounts[1]);
+        });
+
+        // Test Scenario 4 (difficulty of a block is not correct):
+        //
+        // (0)---(1)-X-(2)
+        //
+        //
+        it('should fail because the difficulty of a block is not valid', async () => {
+            const requiredStakePerBlock = await merklerelay.getRequiredStakePerRoot();
+            const stakeAccount0 = requiredStakePerBlock.mul(new BN(2));
+            const stakeAccount1 = requiredStakePerBlock.mul(new BN(2));
+            await merklerelay.depositStake(stakeAccount0, {
+                from: accounts[0],
+                value: stakeAccount0,
+                gasPrice: GAS_PRICE_IN_WEI
+            });  // submits block 1
+
+            await merklerelay.depositStake(stakeAccount1, {
+                from: accounts[1],
+                value: stakeAccount1,
+                gasPrice: GAS_PRICE_IN_WEI
+            });  // submits blocks 2,3
+
+            let genesisBlock = (await mainWeb3.eth.getBlock(GENESIS_BLOCK));
+            let parentHash = genesisBlock.hash;
+
+            // Create expected chain
+            const block1 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 1);
+            const block2 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 2);
+            const block3 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 3);
+            const block4 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 4);
+            
+            const block5 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 5);
+            const block6 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 6);
+            const block7 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 7);
+            const block8 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 8);
+
+            // change the difficulty such that the PoW validation results in false (prune Branch)
+            const newDifficulty = mainWeb3.utils.toBN(block5.difficulty).add(mainWeb3.utils.toBN(1000));
+            block5.difficulty = newDifficulty.toString();
+            block5.hash = calculateBlockHash(block5);
+            block6.parentHash = block5.hash;
+            block6.hash = calculateBlockHash(block6);
+            block7.parentHash = block6.hash;
+            block7.hash = calculateBlockHash(block7);
+            block8.parentHash = block7.hash;
+            block8.hash = calculateBlockHash(block8);
+
+            let elements = [];
+            let expectedRoots = [];
+
+            // Add (1)
+            elements.push(createRLPHeader(block1));
+            elements.push(createRLPHeader(block2));
+            elements.push(createRLPHeader(block3));
+            elements.push(createRLPHeader(block4));
+
+                
+            const proofLeaves = elements.map(keccak256);
+            const merkleTree = new MerkleTree(proofLeaves, keccak256);
+            const root = merkleTree.getHexRoot();
+
+            ret = await merklerelay.submitRoot(elements.map(Buffer.from), parentHash, {
+                from: accounts[0],
+                gas: 3000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            
+            expectEvent.inLogs(ret.logs, 'NewRoot', {root: root});
+            parentHash = root;
+            submitTime = await time.latest();
+
+            // Add (2)
+            let elementsBis = [];
+            elementsBis.push(createRLPHeader(block5));
+            elementsBis.push(createRLPHeader(block6));
+            elementsBis.push(createRLPHeader(block7));
+            elementsBis.push(createRLPHeader(block8));
+
+                
+            const proofLeavesBis = elementsBis.map(keccak256);
+            const merkleTreeBis = new MerkleTree(proofLeavesBis, keccak256);
+            const rootBis = merkleTreeBis.getHexRoot();
+
+            ret = await merklerelay.submitRoot(elementsBis.map(Buffer.from), parentHash, {
+                from: accounts[0],
+                gas: 3000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            
+            expectEvent.inLogs(ret.logs, 'NewRoot', {root: rootBis});
+
+            const {
+                "DatasetLookUp":    dataSetLookupBlock2,
+                "WitnessForLookup": witnessForLookupBlock2,
+            } = require("./pow/genesisPlus88.json");
+
+            const powMetadata = {dataSetLookup: dataSetLookupBlock2, witnessForLookup: witnessForLookupBlock2};
+
+            let proof = merkleTreeBis.getProof(proofLeavesBis[0]);
+            let proofSC = proof.map((el, i) => {return el.position == 'right' ?  {position: true, data: el.data} : {position: false, data: el.data}}); 
+            let position_array = proofSC.map((el,i)=> {return el.position});
+            let data_array = proofSC.map((el, i) => {return el.data});
+
+            const blockProof = {proof: data_array, position: position_array};
+
+            let parentProof = merkleTree.getProof(proofLeaves[3]);
+            let parentProofSC = parentProof.map((el, i) => {return el.position == 'right' ?  {position: true, data: el.data} : {position: false, data: el.data}}); 
+            let parent_position_array = parentProofSC.map((el,i)=> {return el.position});
+            let parent_data_array = parentProofSC.map((el, i) => {return el.data});
+
+            const blockParentProof = {proof: parent_data_array, position: parent_position_array};
+
+            ret = await merklerelay.disputeBlockHeader(createRLPHeader(block5), blockProof, 
+                    createRLPHeader(block4), blockParentProof, rootBis, root, powMetadata, {
+                from: accounts[0],
+                gas: 3000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            expectEvent.inLogs(ret.logs, 'DisputeBlock', {returnCode: new BN(7)});
+            
+            expectedRoots.push(
+                {
+                    hash: root,
+                    lastHash: '0x'+keccak256(elements[elements.length-1]).toString('hex'),
+                    number: (await mainWeb3.eth.getBlock(GENESIS_BLOCK+elements.length)).number,
+                    totalDifficulty: (await mainWeb3.eth.getBlock(GENESIS_BLOCK+elements.length)).totalDifficulty,
+                    lengthUpdate: elements.length,
+                    forkId: 0,
+                    iterableIndex: 0,
+                    latestFork: "0x0000000000000000000000000000000000000000000000000000000000000000", // TODO is this correct?
+                    lockedUntil: submitTime.add(LOCK_PERIOD),
+                    submitter: accounts[0],
+                    successors: []
+                }
+            );
+
+            // Check
+            await checkExpectedEndpoints(expectedRoots);
+            await checkExpectedRoots(expectedRoots);
+
+            // withdraw stake
+            await withdrawStake(stakeAccount0, accounts[0]);
+            await withdrawStake(stakeAccount1, accounts[1]);
+        });
+
+        // Test Scenario 5 (difficulty of a block is not correct):
+        //
+        // (0)---(1)-X-(2)
+        //
+        //
+        it('should fail because the gasLimit of a block is too high', async () => {
+            const requiredStakePerBlock = await merklerelay.getRequiredStakePerRoot();
+            const stakeAccount0 = requiredStakePerBlock.mul(new BN(2));
+            const stakeAccount1 = requiredStakePerBlock.mul(new BN(2));
+            await merklerelay.depositStake(stakeAccount0, {
+                from: accounts[0],
+                value: stakeAccount0,
+                gasPrice: GAS_PRICE_IN_WEI
+            });  // submits block 1
+
+            await merklerelay.depositStake(stakeAccount1, {
+                from: accounts[1],
+                value: stakeAccount1,
+                gasPrice: GAS_PRICE_IN_WEI
+            });  // submits blocks 2,3
+
+            let genesisBlock = (await mainWeb3.eth.getBlock(GENESIS_BLOCK));
+            let parentHash = genesisBlock.hash;
+
+            // Create expected chain
+            const block1 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 1);
+            const block2 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 2);
+            const block3 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 3);
+            const block4 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 4);
+            
+            const block5 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 5);
+            const block6 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 6);
+            const block7 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 7);
+            const block8 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 8);
+
+            // change the difficulty such that the PoW validation results in false (prune Branch)
+            block5.gasLimit = MAX_GAS_LIMIT + 1n;;
+            block5.hash = calculateBlockHash(block5);
+            block6.parentHash = block5.hash;
+            block6.hash = calculateBlockHash(block6);
+            block7.parentHash = block6.hash;
+            block7.hash = calculateBlockHash(block7);
+            block8.parentHash = block7.hash;
+            block8.hash = calculateBlockHash(block8);
+
+            let elements = [];
+            let expectedRoots = [];
+
+            // Add (1)
+            elements.push(createRLPHeader(block1));
+            elements.push(createRLPHeader(block2));
+            elements.push(createRLPHeader(block3));
+            elements.push(createRLPHeader(block4));
+
+                
+            const proofLeaves = elements.map(keccak256);
+            const merkleTree = new MerkleTree(proofLeaves, keccak256);
+            const root = merkleTree.getHexRoot();
+
+            ret = await merklerelay.submitRoot(elements.map(Buffer.from), parentHash, {
+                from: accounts[0],
+                gas: 3000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            
+            expectEvent.inLogs(ret.logs, 'NewRoot', {root: root});
+            parentHash = root;
+            submitTime = await time.latest();
+
+            // Add (2)
+            let elementsBis = [];
+            elementsBis.push(createRLPHeader(block5));
+            elementsBis.push(createRLPHeader(block6));
+            elementsBis.push(createRLPHeader(block7));
+            elementsBis.push(createRLPHeader(block8));
+
+                
+            const proofLeavesBis = elementsBis.map(keccak256);
+            const merkleTreeBis = new MerkleTree(proofLeavesBis, keccak256);
+            const rootBis = merkleTreeBis.getHexRoot();
+
+            ret = await merklerelay.submitRoot(elementsBis.map(Buffer.from), parentHash, {
+                from: accounts[0],
+                gas: 3000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            
+            expectEvent.inLogs(ret.logs, 'NewRoot', {root: rootBis});
+
+            const {
+                "DatasetLookUp":    dataSetLookupBlock2,
+                "WitnessForLookup": witnessForLookupBlock2,
+            } = require("./pow/genesisPlus88.json");
+
+            const powMetadata = {dataSetLookup: dataSetLookupBlock2, witnessForLookup: witnessForLookupBlock2};
+
+            let proof = merkleTreeBis.getProof(proofLeavesBis[0]);
+            let proofSC = proof.map((el, i) => {return el.position == 'right' ?  {position: true, data: el.data} : {position: false, data: el.data}}); 
+            let position_array = proofSC.map((el,i)=> {return el.position});
+            let data_array = proofSC.map((el, i) => {return el.data});
+
+            const blockProof = {proof: data_array, position: position_array};
+
+            let parentProof = merkleTree.getProof(proofLeaves[3]);
+            let parentProofSC = parentProof.map((el, i) => {return el.position == 'right' ?  {position: true, data: el.data} : {position: false, data: el.data}}); 
+            let parent_position_array = parentProofSC.map((el,i)=> {return el.position});
+            let parent_data_array = parentProofSC.map((el, i) => {return el.data});
+
+            const blockParentProof = {proof: parent_data_array, position: parent_position_array};
+
+            ret = await merklerelay.disputeBlockHeader(createRLPHeader(block5), blockProof, 
+                    createRLPHeader(block4), blockParentProof, rootBis, root, powMetadata, {
+                from: accounts[0],
+                gas: 3000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            expectEvent.inLogs(ret.logs, 'DisputeBlock', {returnCode: new BN(8)});
+            
+            expectedRoots.push(
+                {
+                    hash: root,
+                    lastHash: '0x'+keccak256(elements[elements.length-1]).toString('hex'),
+                    number: (await mainWeb3.eth.getBlock(GENESIS_BLOCK+elements.length)).number,
+                    totalDifficulty: (await mainWeb3.eth.getBlock(GENESIS_BLOCK+elements.length)).totalDifficulty,
+                    lengthUpdate: elements.length,
+                    forkId: 0,
+                    iterableIndex: 0,
+                    latestFork: "0x0000000000000000000000000000000000000000000000000000000000000000", // TODO is this correct?
+                    lockedUntil: submitTime.add(LOCK_PERIOD),
+                    submitter: accounts[0],
+                    successors: []
+                }
+            );
+
+            // Check
+            await checkExpectedEndpoints(expectedRoots);
+            await checkExpectedRoots(expectedRoots);
+
+            // withdraw stake
+            await withdrawStake(stakeAccount0, accounts[0]);
+            await withdrawStake(stakeAccount1, accounts[1]);
+        });
+
+        // Test Scenario 5 (difficulty of a block is not correct):
+        //
+        // (0)---(1)-X-(2)
+        //
+        //
+        it('should fail because the gasLimit of a block is too low', async () => {
+            const requiredStakePerBlock = await merklerelay.getRequiredStakePerRoot();
+            const stakeAccount0 = requiredStakePerBlock.mul(new BN(2));
+            const stakeAccount1 = requiredStakePerBlock.mul(new BN(2));
+            await merklerelay.depositStake(stakeAccount0, {
+                from: accounts[0],
+                value: stakeAccount0,
+                gasPrice: GAS_PRICE_IN_WEI
+            });  // submits block 1
+
+            await merklerelay.depositStake(stakeAccount1, {
+                from: accounts[1],
+                value: stakeAccount1,
+                gasPrice: GAS_PRICE_IN_WEI
+            });  // submits blocks 2,3
+
+            let genesisBlock = (await mainWeb3.eth.getBlock(GENESIS_BLOCK));
+            let parentHash = genesisBlock.hash;
+
+            // Create expected chain
+            const block1 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 1);
+            const block2 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 2);
+            const block3 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 3);
+            const block4 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 4);
+            
+            const block5 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 5);
+            const block6 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 6);
+            const block7 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 7);
+            const block8 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 8);
+
+            // change the difficulty such that the PoW validation results in false (prune Branch)
+            block5.gasLimit = MIN_GAS_LIMIT - 1;
+            block5.hash = calculateBlockHash(block5);
+            block6.parentHash = block5.hash;
+            block6.hash = calculateBlockHash(block6);
+            block7.parentHash = block6.hash;
+            block7.hash = calculateBlockHash(block7);
+            block8.parentHash = block7.hash;
+            block8.hash = calculateBlockHash(block8);
+
+            let elements = [];
+            let expectedRoots = [];
+
+            // Add (1)
+            elements.push(createRLPHeader(block1));
+            elements.push(createRLPHeader(block2));
+            elements.push(createRLPHeader(block3));
+            elements.push(createRLPHeader(block4));
+
+                
+            const proofLeaves = elements.map(keccak256);
+            const merkleTree = new MerkleTree(proofLeaves, keccak256);
+            const root = merkleTree.getHexRoot();
+
+            ret = await merklerelay.submitRoot(elements.map(Buffer.from), parentHash, {
+                from: accounts[0],
+                gas: 8000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            
+            expectEvent.inLogs(ret.logs, 'NewRoot', {root: root});
+            parentHash = root;
+            submitTime = await time.latest();
+
+            // Add (2)
+            let elementsBis = [];
+            elementsBis.push(createRLPHeader(block5));
+            elementsBis.push(createRLPHeader(block6));
+            elementsBis.push(createRLPHeader(block7));
+            elementsBis.push(createRLPHeader(block8));
+
+                
+            const proofLeavesBis = elementsBis.map(keccak256);
+            const merkleTreeBis = new MerkleTree(proofLeavesBis, keccak256);
+            const rootBis = merkleTreeBis.getHexRoot();
+
+            ret = await merklerelay.submitRoot(elementsBis.map(Buffer.from), parentHash, {
+                from: accounts[0],
+                gas: 8000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            
+            expectEvent.inLogs(ret.logs, 'NewRoot', {root: rootBis});
+
+            const {
+                "DatasetLookUp":    dataSetLookupBlock2,
+                "WitnessForLookup": witnessForLookupBlock2,
+            } = require("./pow/genesisPlus88.json");
+
+            const powMetadata = {dataSetLookup: dataSetLookupBlock2, witnessForLookup: witnessForLookupBlock2};
+
+            let proof = merkleTreeBis.getProof(proofLeavesBis[0]);
+            let proofSC = proof.map((el, i) => {return el.position == 'right' ?  {position: true, data: el.data} : {position: false, data: el.data}}); 
+            let position_array = proofSC.map((el,i)=> {return el.position});
+            let data_array = proofSC.map((el, i) => {return el.data});
+
+            const blockProof = {proof: data_array, position: position_array};
+
+            let parentProof = merkleTree.getProof(proofLeaves[3]);
+            let parentProofSC = parentProof.map((el, i) => {return el.position == 'right' ?  {position: true, data: el.data} : {position: false, data: el.data}}); 
+            let parent_position_array = parentProofSC.map((el,i)=> {return el.position});
+            let parent_data_array = parentProofSC.map((el, i) => {return el.data});
+
+            const blockParentProof = {proof: parent_data_array, position: parent_position_array};
+
+            ret = await merklerelay.disputeBlockHeader(createRLPHeader(block5), blockProof, 
+                    createRLPHeader(block4), blockParentProof, rootBis, root, powMetadata, {
+                from: accounts[0],
+                gas: 3000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            expectEvent.inLogs(ret.logs, 'DisputeBlock', {returnCode: new BN(9)});
+            
+            expectedRoots.push(
+                {
+                    hash: root,
+                    lastHash: '0x'+keccak256(elements[elements.length-1]).toString('hex'),
+                    number: (await mainWeb3.eth.getBlock(GENESIS_BLOCK+elements.length)).number,
+                    totalDifficulty: (await mainWeb3.eth.getBlock(GENESIS_BLOCK+elements.length)).totalDifficulty,
+                    lengthUpdate: elements.length,
+                    forkId: 0,
+                    iterableIndex: 0,
+                    latestFork: "0x0000000000000000000000000000000000000000000000000000000000000000", // TODO is this correct?
+                    lockedUntil: submitTime.add(LOCK_PERIOD),
+                    submitter: accounts[0],
+                    successors: []
+                }
+            );
+
+            // Check
+            await checkExpectedEndpoints(expectedRoots);
+            await checkExpectedRoots(expectedRoots);
+
+            // withdraw stake
+            await withdrawStake(stakeAccount0, accounts[0]);
+            await withdrawStake(stakeAccount1, accounts[1]);
+        });
+        
     });
 
     // checks if expectedEndpoints array is correct and if longestChainEndpoints contains hash of block with highest difficulty
