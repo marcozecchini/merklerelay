@@ -210,58 +210,59 @@ contract('MerkleRelay', async(accounts) => {
             }), "proof and position have different length");
 
         });
+    });
 
-        describe('Merklerelay: DepositStake', function () {
-            before(async () => {
-                mainWeb3 = new Web3(INFURA_MAINNET_ENDPOINT);
-                ethash = await EthashOwner.new();
-                // const epochData = require(EPOCHFILE);
-        
-                // console.log(`Submitting data for epoch ${EPOCH} to Ethash contract...`);
-                // await submitEpochData(ethash, EPOCH, epochData.FullSizeIn128Resolution, epochData.BranchDepth, epochData.MerkleNodes);
-                // console.log("Submitted epoch data.");
-        
+    describe('Merklerelay: DepositStake', function () {
+        before(async () => {
+            mainWeb3 = new Web3(INFURA_MAINNET_ENDPOINT);
+            ethash = await EthashOwner.new();
+            // const epochData = require(EPOCHFILE);
+    
+            // console.log(`Submitting data for epoch ${EPOCH} to Ethash contract...`);
+            // await submitEpochData(ethash, EPOCH, epochData.FullSizeIn128Resolution, epochData.BranchDepth, epochData.MerkleNodes);
+            // console.log("Submitted epoch data.");
+    
+        });
+    
+        beforeEach(async () => {
+            const genesisBlock = await mainWeb3.eth.getBlock(GENESIS_BLOCK);
+            const genesisRlpHeader = createRLPHeader(genesisBlock);
+    
+            merklerelay = await MerkleRelay.new(genesisRlpHeader, genesisBlock.totalDifficulty, ethash.address, {
+                from: accounts[0],
+                gasPrice: GAS_PRICE_IN_WEI
             });
-        
-            beforeEach(async () => {
-                const genesisBlock = await mainWeb3.eth.getBlock(GENESIS_BLOCK);
-                const genesisRlpHeader = createRLPHeader(genesisBlock);
-        
-                merklerelay = await MerkleRelay.new(genesisRlpHeader, genesisBlock.totalDifficulty, ethash.address, {
+        });
+
+        // Test Scenario 1:
+        it("should throw error: transfer amount not equal to function parameter", async () => {
+            const stake = new BN(1);
+            await expectRevert(
+                merklerelay.depositStake(stake, {
                     from: accounts[0],
+                    value: stake.add(new BN(1)),
                     gasPrice: GAS_PRICE_IN_WEI
-                });
+                }),
+                "transfer amount not equal to function parameter");
+        });
+
+        // Test Scenario 2:
+        it("should correctly add the provided stake to the client's balance", async () => {
+            const stake = new BN(15);
+            const balanceBeforeCall = await merklerelay.getStake({from: accounts[0]});
+
+            await merklerelay.depositStake(stake, {from: accounts[0], value: stake});
+            const balanceAfterCall = await merklerelay.getStake({from: accounts[0]});
+
+            expect(balanceAfterCall).to.be.bignumber.equal(balanceBeforeCall.add(stake));
+
+            await merklerelay.withdrawStake(stake, {from: accounts[0]});
+            const balanceAfterCallBis = await merklerelay.getStake({from: accounts[0]});
+
+            expect(balanceAfterCallBis).to.be.bignumber.equal(balanceBeforeCall);
+            
             });
 
-            // Test Scenario 1:
-            it("should throw error: transfer amount not equal to function parameter", async () => {
-                const stake = new BN(1);
-                await expectRevert(
-                    merklerelay.depositStake(stake, {
-                        from: accounts[0],
-                        value: stake.add(new BN(1)),
-                        gasPrice: GAS_PRICE_IN_WEI
-                    }),
-                    "transfer amount not equal to function parameter");
-            });
-    
-            // Test Scenario 2:
-            it("should correctly add the provided stake to the client's balance", async () => {
-                const stake = new BN(15);
-                const balanceBeforeCall = await merklerelay.getStake({from: accounts[0]});
-    
-                await merklerelay.depositStake(stake, {from: accounts[0], value: stake});
-                const balanceAfterCall = await merklerelay.getStake({from: accounts[0]});
-    
-                expect(balanceAfterCall).to.be.bignumber.equal(balanceBeforeCall.add(stake));
-
-                await merklerelay.withdrawStake(stake, {from: accounts[0]});
-                const balanceAfterCallBis = await merklerelay.getStake({from: accounts[0]});
-    
-                expect(balanceAfterCallBis).to.be.bignumber.equal(balanceBeforeCall);
-                
-            });
-    
         });
 
         describe('MerkleRelay: MerkleTree submission', function() {
@@ -654,6 +655,138 @@ contract('MerkleRelay', async(accounts) => {
             });
 
         });
+    
+    describe('MerkleRelay: MerkleTree dispute', function() {
+        let genesisTime;
+        before(async () => {
+            mainWeb3 = new Web3(INFURA_MAINNET_ENDPOINT);
+            ethash = await EthashOwner.new();
+            const epochData = require(EPOCHFILE);
+    
+            console.log(`Submitting data for epoch ${EPOCH} to Ethash contract...`);
+            await submitEpochData(ethash, EPOCH, epochData.FullSizeIn128Resolution, epochData.BranchDepth, epochData.MerkleNodes);
+            console.log("Submitted epoch data.");
+    
+        });
+    
+        beforeEach(async () => {
+            const genesisBlock = await mainWeb3.eth.getBlock(GENESIS_BLOCK);
+            const genesisRlpHeader = createRLPHeader(genesisBlock);
+            merklerelay = await MerkleRelay.new(genesisRlpHeader, genesisBlock.totalDifficulty, ethash.address, {
+                from: accounts[0],
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            genesisTime = await time.latest();
+
+        });
+
+        // Test Scenario 1 (verification of Ethash should fail):
+        //
+        // (0)-X-(1)
+        //
+        //
+        it('should correctly execute test scenario 1', async () => {
+            const requiredStakePerBlock = await merklerelay.getRequiredStakePerRoot();
+            const stakeAccount0 = requiredStakePerBlock.mul(new BN(2));
+            const stakeAccount1 = requiredStakePerBlock.mul(new BN(2));
+            await merklerelay.depositStake(stakeAccount0, {
+                from: accounts[0],
+                value: stakeAccount0,
+                gasPrice: GAS_PRICE_IN_WEI
+            });  // submits block 1
+
+            await merklerelay.depositStake(stakeAccount1, {
+                from: accounts[1],
+                value: stakeAccount1,
+                gasPrice: GAS_PRICE_IN_WEI
+            });  // submits blocks 2,3
+
+            let genesisBlock = (await mainWeb3.eth.getBlock(GENESIS_BLOCK));
+            let parentHash = genesisBlock.hash;
+
+            // Create expected chain
+            const block1 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 1);
+            const block2 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 2);
+            const block3 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 3);
+            const block4 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 4);
+
+            // change nonce such that the PoW validation results in false (prune Branch)
+            block2.nonce = addToHex(block2.nonce, 1);
+            block2.hash = calculateBlockHash(block2);
+            block3.parentHash = block2.hash;
+            block3.hash = calculateBlockHash(block3);
+            block4.parentHash = block3.hash;
+            block4.hash = calculateBlockHash(block4);
+
+            let elements = [];
+            let expectedRoots = [];
+
+            // Add (1)
+            elements.push(createRLPHeader(block1));
+            elements.push(createRLPHeader(block2));
+            elements.push(createRLPHeader(block3));
+            elements.push(createRLPHeader(block4));
+
+                
+            const proofLeaves = elements.map(keccak256);
+            const merkleTree = new MerkleTree(proofLeaves, keccak256);
+            const root = merkleTree.getHexRoot();
+
+            ret = await merklerelay.submitRoot(elements.map(Buffer.from), parentHash, {
+                from: accounts[0],
+                gas: 20000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            
+            expectEvent.inLogs(ret.logs, 'NewRoot', {root: root});
+
+            const {
+                "DatasetLookUp":    dataSetLookupBlock2,
+                "WitnessForLookup": witnessForLookupBlock2,
+            } = require("./pow/genesisPlus2.json");
+
+            const powMetadata = {dataSetLookup: dataSetLookupBlock2, witnessForLookup: witnessForLookupBlock2};
+
+            let proof = merkleTree.getProof(proofLeaves[1]);
+            let proofSC = proof.map((el, i) => {return el.position == 'right' ?  {position: true, data: el.data} : {position: false, data: el.data}}); 
+            let position_array = proofSC.map((el,i)=> {return el.position});
+            let data_array = proofSC.map((el, i) => {return el.data});
+
+            // function disputeBlockHeader(bytes calldata rlpHeader, bytes32[] calldata proof, bool[] calldata position, bytes calldata rlpParent, bytes32 root, uint[] memory dataSetLookup, uint[] memory witnessForLookup) public {
+
+            ret = await merklerelay.disputeBlockHeader(createRLPHeader(block2), data_array, position_array, 
+                    createRLPHeader(block1), root, root, powMetadata, {
+                from: accounts[0],
+                gas: 20000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            expectEvent.inLogs(ret.logs, 'DisputeBlock', {returnCode: new BN(2)});
+            
+            expectedRoots.push(
+                {
+                    hash: parentHash,
+                    lastHash: parentHash,
+                    number: (await mainWeb3.eth.getBlock(GENESIS_BLOCK)).number,
+                    totalDifficulty: (await mainWeb3.eth.getBlock(GENESIS_BLOCK)).totalDifficulty,
+                    lengthUpdate: 1,
+                    forkId: 0,
+                    iterableIndex: 0,
+                    latestFork: "0x0000000000000000000000000000000000000000000000000000000000000000", // the latestFork should be all 0 because it is genesis
+                    lockedUntil: genesisTime, // no add because it is the genesis
+                    submitter: accounts[0],
+                    successors: []
+                }
+            );
+
+            // Check
+            await checkExpectedEndpoints(expectedRoots);
+            await checkExpectedRoots(expectedRoots);
+
+            // withdraw stake
+            await withdrawStake(stakeAccount0, accounts[0]);
+            await withdrawStake(stakeAccount1, accounts[1]);
+        });
+
 
     });
 

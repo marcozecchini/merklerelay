@@ -62,6 +62,11 @@ contract MerkleRelayCore {
         uint difficulty;
         bytes extraData;
     }
+
+    struct PoWMetadata {
+        uint[] dataSetLookup; ///contains elements of the DAG needed for the PoW verification
+        uint[] witnessForLookup; /// needed for verifying the dataSetLookup
+    }
     
     uint64 maxForkId = 0;                           // current fork-id, is incrementing
     bytes32 longestChainEndpoint;                   // saves the hash of the block with the highest blockNr. (most PoW work)
@@ -83,6 +88,7 @@ contract MerkleRelayCore {
 
         newRoot.parentRoot = newBlockHash;
         newRoot.blockNumber = uint24(parsedHeader.blockNumber);
+        newRoot.lengthUpdate = 1;
         newRoot.totalDifficulty = uint256(totalDifficulty);
         // newRoot.meta.forkId = maxForkId;  // the first block is no fork (forkId = 0)
         iterableEndpoints.push(newBlockHash);
@@ -229,27 +235,26 @@ contract MerkleRelayCore {
 
     event DisputeBlock(uint returnCode);
     event PoWValidationResult(uint returnCode, uint errorInfo);
+    event rootP(bytes32 rootParent, RootMetadata rm);
     /// @dev If a client is convinced that a certain block header is invalid, it can call this function which validates
     ///      whether enough PoW has been carried out.
     /// @param rlpHeader the encoded version of the block header to dispute
     /// @param rlpParent the encoded version of the block header's parent
-    /// @param dataSetLookup contains elements of the DAG needed for the PoW verification
-    /// @param witnessForLookup needed for verifying the dataSetLookup
+    /// @param powmetadata metadata for validating PoW
     /// @return A list of addresses belonging to the submitters of illegal blocks
-    function disputeBlock(bytes calldata rlpHeader, bytes calldata rlpParent, 
-        uint[] memory dataSetLookup, uint[] memory witnessForLookup) internal returns (address[] memory) {
+    function disputeBlock(bytes calldata rlpHeader, bytes calldata rlpParent, PoWMetadata calldata powmetadata,
+        bytes32 root, bytes32 rootParent) internal returns (address[] memory) {
 
         // Currently, once the dispute period is over and the block is unlocked we accept it as valid.
         // In that case, no validation is carried out anymore.
 
         // outsourcing verifying of validity and PoW because solidity encountered a stack too deep exception before
-        uint returnCode = verifyValidityAndPoW(rlpHeader, rlpParent, dataSetLookup, witnessForLookup);
+        uint returnCode = verifyValidityAndPoW(rlpHeader, rlpParent, powmetadata, root, rootParent);
 
         address[] memory submittersToPunish = new address[](0);
 
         if (returnCode != 0) {
-            bytes32 rootParent = keccak256(rlpParent);
-            submittersToPunish = removeBranch(keccak256(rlpHeader), rootChain[rootParent], rootParent);
+            submittersToPunish = removeBranch(root);            
         }
 
         emit DisputeBlock(returnCode);
@@ -258,27 +263,35 @@ contract MerkleRelayCore {
     }
 
     // helper function to not get a stack to deep exception
-    function verifyValidityAndPoW(bytes calldata rlpHeader, bytes memory rlpParent, uint[] memory dataSetLookup, uint[] memory witnessForLookup) private returns (uint) {
+    function verifyValidityAndPoW(bytes calldata rlpHeader, bytes memory rlpParent,  PoWMetadata calldata powmetadata, bytes32 root, bytes32 rootParent) private returns (uint) {
         uint returnCode;
         uint24 blockNumber;
         uint nonce;
         uint difficulty;
 
         // verify validity of header and parent
-        (returnCode, blockNumber, nonce, difficulty) = verifyValidity(rlpHeader, rlpParent);
+        (returnCode, blockNumber, nonce, difficulty) = verifyValidity(rlpHeader, rlpParent, root, rootParent);
 
         // if return code is 0, the block and it's parent seem to be valid
         // next check the ethash PoW algorithm
         if (returnCode == 0) {
             // header validation without checking Ethash was successful -> verify Ethash
-            uint errorInfo;
-
-            (returnCode, errorInfo) = ethashContract.verifyPoW(blockNumber, getRlpHeaderHashWithoutNonce(rlpHeader),
-                nonce, difficulty, dataSetLookup, witnessForLookup);
-
-            emit PoWValidationResult(returnCode, errorInfo);
+            return invokeVerifyPoW(rlpHeader, powmetadata, blockNumber, nonce, difficulty);
         }
 
+        return returnCode;
+    }
+
+    function invokeVerifyPoW (bytes calldata rlpHeader,  PoWMetadata calldata powmetadata, uint24 blockNumber,
+        uint nonce, uint difficulty) private returns (uint) {
+        // header validation without checking Ethash was successful -> verify Ethash
+        uint errorInfo;
+        uint returnCode;
+
+        (returnCode, errorInfo) = ethashContract.verifyPoW(blockNumber, getRlpHeaderHashWithoutNonce(rlpHeader),
+            nonce, difficulty, powmetadata.dataSetLookup, powmetadata.witnessForLookup);
+
+        emit PoWValidationResult(returnCode, errorInfo);
         return returnCode;
     }
 
@@ -287,23 +300,21 @@ contract MerkleRelayCore {
     // so maybe this necessary call can be enhanced to use a little less gas integrating in the upper method while
     // preserving the logic, e.g. the storedParent is read read from storage 2 times, maybe pass as argument if cheaper,
     // this should not cause too much cost increase
-    function verifyValidity(bytes memory rlpRoot, bytes memory rlpParent) private view returns (uint, uint24, uint, uint) {
-        bytes32 rootHash = keccak256(rlpRoot);
+    function verifyValidity(bytes memory rlpBlock, bytes memory rlpParent, bytes32 root, bytes32 rootParent) private view returns (uint, uint24, uint, uint) {
         bytes32 parentHash = keccak256(rlpParent);
 
-        require(!isUnlocked(rootHash), "dispute period is expired");
+        require(!isUnlocked(root), "dispute period is expired");
 
-        RootMetadata storage storedHeader = rootChain[rootHash];
-        RootMetadata storage storedParent = rootChain[parentHash];
+        RootMetadata storage storedRootParent = rootChain[rootParent];
 
-        require(isRootSuccessorOfParent(rootHash, storedParent), "stored parent is not a predecessor of stored header within Ethrelay");
+        require(isRootSuccessorOfParent(root, storedRootParent) || root == rootParent, "stored parent is not a predecessor of stored header within MerkleRelay");
 
-        FullHeader memory providedHeader = parseRlpEncodedHeader(rlpRoot);
+        FullHeader memory providedHeader = parseRlpEncodedHeader(rlpBlock);
         FullHeader memory providedParent = parseRlpEncodedHeader(rlpParent);
 
         require(providedHeader.parent == parentHash, "provided header's parent does not match with provided parent' hash");
 
-        return (checkHeaderValidity(providedHeader, providedParent), storedHeader.blockNumber, providedHeader.nonce, providedHeader.difficulty);
+        return (checkHeaderValidity(providedHeader, providedParent), uint24(providedHeader.blockNumber), providedHeader.nonce, providedHeader.difficulty);
     }
 
     function isRootSuccessorOfParent(bytes32 root, RootMetadata memory parent) private pure returns (bool) {
@@ -487,19 +498,20 @@ contract MerkleRelayCore {
     }
 
     event RemoveBranch(bytes32 root);
-
-    function removeBranch(bytes32 rootHash, RootMetadata storage parentRoot, bytes32 rootHashParent) private returns (address[] memory) {
-        address[] memory submitters = pruneBranch(rootHash, 0);
-
+    function removeBranch(bytes32 root) private returns (address[] memory) {
+        bytes32 parentHash = rootChain[root].parentRoot;
+        RootMetadata storage parentRoot = rootChain[parentHash];
+        
+        address[] memory submitters = pruneBranch(root, 0);
         if (parentRoot.successors.length == 1) {
             // parentHeader has only one successor --> parentHeader will be an endpoint after pruning
-            iterableEndpoints.push(rootHashParent);
+            iterableEndpoints.push(parentHash);
             parentRoot.iterableIndex = uint64(iterableEndpoints.length - 1);
         }
 
         // remove root (which will be pruned) from the parent's successor list
         for (uint i=0; i < parentRoot.successors.length; i++) {
-            if (parentRoot.successors[i] == rootHash) {
+            if (parentRoot.successors[i] == root) {
 
                 // overwrite root with last successor and delete last successor
                 parentRoot.successors[i] = parentRoot.successors[parentRoot.successors.length - 1];
@@ -523,7 +535,7 @@ contract MerkleRelayCore {
             }
         }
 
-        emit RemoveBranch(rootHash);
+        emit RemoveBranch(root);
 
         return submitters;
     }

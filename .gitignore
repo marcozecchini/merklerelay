@@ -6,3 +6,4 @@ Ethrelay.sol
 EthrelayCore.sol
 start_node.sh
 constant.js
+bin/
