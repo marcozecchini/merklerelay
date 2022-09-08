@@ -125,7 +125,7 @@ contract MerkleRelay is MerkleRelayCore {
     }
 
     function verify(uint8 verificationType, uint feeInWei, bytes memory rlpHeader, uint8 noOfConfirmations, bytes memory rlpEncodedValue,
-        bytes memory path, bytes memory rlpEncodedNodes) private returns (uint8) {
+        bytes memory path, bytes memory rlpEncodedNodes, bytes32 root) private returns (uint8) {
 
         require(feeInWei == msg.value, "transfer amount not equal to function parameter");
         require(feeInWei >= REQUIRED_VERIFICATION_FEE_IN_WEI, "provided fee is less than expected fee");
@@ -134,22 +134,21 @@ contract MerkleRelay is MerkleRelayCore {
         uint8 result;
 
         if (verificationType == VERIFICATION_TYPE_TX) {
-            result = verifyMerkleProof(blockHash, noOfConfirmations, rlpEncodedValue, path, rlpEncodedNodes, getTxRoot(rlpHeader));
+            result = verifyMerkleProof(blockHash, noOfConfirmations, rlpEncodedValue, path, rlpEncodedNodes, getTxRoot(rlpHeader), root);
         } else if (verificationType == VERIFICATION_TYPE_RECEIPT) {
-            result = verifyMerkleProof(blockHash, noOfConfirmations, rlpEncodedValue, path, rlpEncodedNodes, getReceiptsRoot(rlpHeader));
+            result = verifyMerkleProof(blockHash, noOfConfirmations, rlpEncodedValue, path, rlpEncodedNodes, getReceiptsRoot(rlpHeader), root);
         } else if (verificationType == VERIFICATION_TYPE_STATE) {
-            result = verifyMerkleProof(blockHash, noOfConfirmations, rlpEncodedValue, path, rlpEncodedNodes, getStateRoot(rlpHeader));
+            result = verifyMerkleProof(blockHash, noOfConfirmations, rlpEncodedValue, path, rlpEncodedNodes, getStateRoot(rlpHeader), root);
         } else {
             revert("Unknown verification type");
         }
 
         // send fee to block submitter
-        (, , , , , address submitter, , ,) = getExtendedRootMetadata(blockHash);
+        (, , , , , address submitter, , ,) = getExtendedRootMetadata(root);
 
         address payable submitterAddr = payable(address(uint160(submitter)));
 
         submitterAddr.transfer(feeInWei);
-
         return result;
     }
 
@@ -164,10 +163,13 @@ contract MerkleRelay is MerkleRelayCore {
     /// @param rlpEncodedNodes an RLP encoded list of nodes of the Merkle branch, first element is the root node, last element the transaction
     /// @return 0: verification was successful
     ///         1: block is confirmed and unlocked, but the Merkle proof was invalid
-    function verifyTransaction(uint feeInWei, bytes memory rlpHeader, uint8 noOfConfirmations, bytes memory rlpEncodedTx,
-        bytes memory path, bytes memory rlpEncodedNodes) payable public returns (uint8) {
+    function verifyTransaction(uint feeInWei, bytes calldata rlpHeader, uint8 noOfConfirmations, bytes memory rlpEncodedTx,
+        bytes memory path, bytes memory rlpEncodedNodes, TreeProof calldata proofMeta, bytes32 root) payable public returns (uint8) {
+            
+        //At first, we verify that the block belongs to the specified root
+        require(_verifyBlock(proofMeta, rlpHeader, root), "disputed block not in root");
 
-        uint8 result = verify(VERIFICATION_TYPE_TX, feeInWei, rlpHeader, noOfConfirmations, rlpEncodedTx, path, rlpEncodedNodes);
+        uint8 result = verify(VERIFICATION_TYPE_TX, feeInWei, rlpHeader, noOfConfirmations, rlpEncodedTx, path, rlpEncodedNodes, root);
 
         emit VerifyTransaction(result);
 
@@ -184,10 +186,13 @@ contract MerkleRelay is MerkleRelayCore {
     /// @param rlpEncodedNodes an RLP encoded list of nodes of the Merkle branch, first element is the root node, last element the receipt
     /// @return 0: verification was successful
     ///         1: block is confirmed and unlocked, but the Merkle proof was invalid
-    function verifyReceipt(uint feeInWei, bytes memory rlpHeader, uint8 noOfConfirmations, bytes memory rlpEncodedReceipt,
-        bytes memory path, bytes memory rlpEncodedNodes) payable public returns (uint8) {
+    function verifyReceipt(uint feeInWei, bytes calldata rlpHeader, uint8 noOfConfirmations, bytes memory rlpEncodedReceipt,
+        bytes memory path, bytes memory rlpEncodedNodes, TreeProof calldata proofMeta, bytes32 root) payable public returns (uint8) {
 
-        uint8 result = verify(VERIFICATION_TYPE_RECEIPT, feeInWei, rlpHeader, noOfConfirmations, rlpEncodedReceipt, path, rlpEncodedNodes);
+        //At first, we verify that the block belongs to the specified root
+        require(_verifyBlock(proofMeta, rlpHeader, root), "disputed block not in root");
+
+        uint8 result = verify(VERIFICATION_TYPE_RECEIPT, feeInWei, rlpHeader, noOfConfirmations, rlpEncodedReceipt, path, rlpEncodedNodes, root);
 
         emit VerifyReceipt(result);
 
@@ -204,10 +209,13 @@ contract MerkleRelay is MerkleRelayCore {
     /// @param rlpEncodedNodes an RLP encoded list of nodes of the Merkle branch, first element is the root node, last element a state node
     /// @return 0: verification was successful
     ///         1: block is confirmed and unlocked, but the Merkle proof was invalid
-    function verifyState(uint feeInWei, bytes memory rlpHeader, uint8 noOfConfirmations, bytes memory rlpEncodedState,
-        bytes memory path, bytes memory rlpEncodedNodes) payable public returns (uint8) {
+    function verifyState(uint feeInWei, bytes calldata rlpHeader, uint8 noOfConfirmations, bytes memory rlpEncodedState,
+        bytes memory path, bytes memory rlpEncodedNodes, TreeProof calldata proofMeta, bytes32 root) payable public returns (uint8) {
 
-        uint8 result = verify(VERIFICATION_TYPE_STATE, feeInWei, rlpHeader, noOfConfirmations, rlpEncodedState, path, rlpEncodedNodes);
+        //At first, we verify that the block belongs to the specified root
+        require(_verifyBlock(proofMeta, rlpHeader, root), "disputed block not in root");
+
+        uint8 result = verify(VERIFICATION_TYPE_STATE, feeInWei, rlpHeader, noOfConfirmations, rlpEncodedState, path, rlpEncodedNodes, root);
 
         emit VerifyState(result);
 

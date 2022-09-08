@@ -346,8 +346,8 @@ contract MerkleRelayCore {
     }
 
 
-    /// @dev Verifies the existence of a transaction, receipt or state ('rlpEncodedValue') within a certain block ('blockHash').
-    /// @param blockHash the hash of the block that contains the Merkle root hash
+    /// @dev Verifies the existence of a transaction, receipt or state ('rlpEncodedValue') within a certain block ('rootHash').
+    /// @param rootHash the hash of the block that contains the Merkle root hash
     /// @param noOfConfirmations the required number of succeeding blocks needed for a block to be considered as confirmed
     /// @param rlpEncodedValue the value of the Merkle Patricia trie (e.g. transaction, receipt, state) in RLP format
     /// @param path the path (key) in the trie indicating the way starting at the root node and ending at the value (e.g. transaction)
@@ -362,25 +362,23 @@ contract MerkleRelayCore {
     //     3. Verify the Merkle Patricia proof of the given block
     //
     // In case we have to check whether enough block confirmations occurred
-    // starting from the requested block ('blockHash'), we go to the latest
+    // starting from the requested block ('rootHash'), we go to the latest
     // unlocked block on the longest chain path (could be the requested block itself)
     // and count the number of confirmations (i.e. the number of unlocked blocks),
     // starting from the latest unlocked block along the longest chain path.
     // The verification only works, if at least 1 (altruistic) participant submits blocks from the source blockchain to retain the correct longest chain
     // and 1 (altruistic) participant disputes illegal blocks to prevent fake/invalid blocks building the longest chain (this can be the same participant)
-    function verifyMerkleProof(bytes32 blockHash, uint8 noOfConfirmations, bytes memory rlpEncodedValue,
-        bytes memory path, bytes memory rlpEncodedNodes, bytes32 merkleRootHash) internal view returns (uint8) {
+    function verifyMerkleProof(bytes32 rootHash, uint8 noOfConfirmations, bytes memory rlpEncodedValue,
+        bytes memory path, bytes memory rlpEncodedNodes, bytes32 merkleRootHash, bytes32 root) internal returns (uint8) {
 
-        require(isRootStored(blockHash), "block does not exist");
-
-        (bool isPartOfLongestPoWCFork, bytes32 confirmationStart) = isBlockPartOfFork(blockHash, longestChainEndpoint);
+        (bool isPartOfLongestPoWCFork, bytes32 confirmationStart) = isBlockPartOfFork(root, longestChainEndpoint);
         require(isPartOfLongestPoWCFork, "block is not part of the longest PoW chain");
 
-        if (rootChain[confirmationStart].blockNumber <= rootChain[blockHash].blockNumber + noOfConfirmations) {
-            noOfConfirmations = noOfConfirmations - uint8(rootChain[confirmationStart].blockNumber - rootChain[blockHash].blockNumber);
-            bool unlockedAndConfirmed = hasEnoughConfirmations(confirmationStart, noOfConfirmations);
-            require(unlockedAndConfirmed, "block is locked or not confirmed by enough blocks");
-        }
+        // if (rootChain[confirmationStart].blockNumber <= rootChain[root].blockNumber + noOfConfirmations) {
+        //     noOfConfirmations = noOfConfirmations - uint8(rootChain[confirmationStart].blockNumber - rootChain[root].blockNumber);
+        //     bool unlockedAndConfirmed = hasEnoughConfirmations(confirmationStart, noOfConfirmations);
+        //     require(unlockedAndConfirmed, "block is locked or not confirmed by enough blocks");
+        // }
 
         if (MerklePatriciaProof.verify(rlpEncodedValue, path, rlpEncodedNodes, merkleRootHash) > 0) {
             return 1;
@@ -411,7 +409,7 @@ contract MerkleRelayCore {
         return true;
     }
 
-    function isBlockPartOfFork(bytes32 blockHash, bytes32 forkEndpoint) private view returns (bool, bytes32) {
+    function isBlockPartOfFork(bytes32 rootHash, bytes32 forkEndpoint) private view returns (bool, bytes32) {
         bytes32 current = forkEndpoint;
         bytes32 confirmationStartHeader;    // the hash from where to start the confirmation count in case the requested block header is part of the longest chain
         uint lastForkId;
@@ -422,7 +420,7 @@ contract MerkleRelayCore {
             confirmationStartHeader = current;
         }
 
-        while (rootChain[current].forkId > rootChain[blockHash].forkId) {
+        while (rootChain[current].forkId > rootChain[rootHash].forkId) {
             // go to next fork point but remember last fork id
             lastForkId = rootChain[current].forkId;
             current = rootChain[current].latestFork;
@@ -435,11 +433,11 @@ contract MerkleRelayCore {
             }
         }
 
-        if (rootChain[current].forkId < rootChain[blockHash].forkId) {
+        if (rootChain[current].forkId < rootChain[rootHash].forkId) {
             return (false, confirmationStartHeader);   // the requested block is NOT part of the longest chain
         }
 
-        if (rootChain[current].blockNumber < rootChain[blockHash].blockNumber) {
+        if (rootChain[current].blockNumber < rootChain[rootHash].blockNumber) {
             // current and the requested block are on a fork with the same fork id
             // however, the requested block comes after the fork point (current), so the requested block cannot be part of the longest chain
             return (false, confirmationStartHeader);
@@ -448,22 +446,22 @@ contract MerkleRelayCore {
         // if no earlier block header has been found from where to start the confirmation verification,
         // we start the verification from the requested block header
         if (confirmationStartHeader == 0) {
-            confirmationStartHeader = blockHash;
+            confirmationStartHeader = rootHash;
         }
 
         return (true, confirmationStartHeader);
     }
 
-    function getSuccessorByForkId(bytes32 blockHash, uint forkId) private view returns (bytes32) {
-        for (uint i = 0; i < rootChain[blockHash].successors.length; i++) {
-            bytes32 successor = rootChain[blockHash].successors[i];
+    function getSuccessorByForkId(bytes32 rootHash, uint forkId) private view returns (bytes32) {
+        for (uint i = 0; i < rootChain[rootHash].successors.length; i++) {
+            bytes32 successor = rootChain[rootHash].successors[i];
 
             if (rootChain[successor].forkId == forkId) {
                 return successor;
             }
         }
 
-        return blockHash;
+        return rootHash;
     }
 
     // @dev Checks whether a block has enough succeeding blocks that are unlocked (dispute period is over).

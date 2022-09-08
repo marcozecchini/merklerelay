@@ -1668,6 +1668,162 @@ contract('MerkleRelay', async(accounts) => {
         }); 
     });
 
+    describe('MerkleRelay: VerifyTransaction', function () {
+
+        // Test Scenario 1:
+        //
+        //              tx
+        //              |
+        //              v
+        // (0)---(1)---(2)-
+        //
+        it('should correctly execute test scenario 1', async () => {
+            // deposit enough stake
+            const requiredStakePerBlock = await merklerelay.getRequiredStakePerRoot();
+            const stakeAccount0 = requiredStakePerBlock.mul(new BN(3));
+            const stakeAccount1 = requiredStakePerBlock.mul(new BN(2));
+            const submitterAddr = accounts[0];
+            const verifierAddr = accounts[1];
+
+            await merklerelay.depositStake(stakeAccount0, {
+                from: accounts[0],
+                value: stakeAccount0,
+                gasPrice: GAS_PRICE_IN_WEI
+            });  // submits block 1
+
+            await merklerelay.depositStake(stakeAccount1, {
+                from: accounts[1],
+                value: stakeAccount1,
+                gasPrice: GAS_PRICE_IN_WEI
+            });  // submits blocks 2,3
+
+            let genesisBlock = (await mainWeb3.eth.getBlock(GENESIS_BLOCK));
+            let parentHash = genesisBlock.hash;
+            const verificationFee = await merklerelay.getRequiredVerificationFee();
+
+            // Create expected chain
+            const block1 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 1);
+            const block2 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 2);
+            const block3 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 3);
+            const block4 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 4);
+            
+            const block5 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 5);
+            const block6 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 6);
+            const block7 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 7);
+            const block8 = await mainWeb3.eth.getBlock(GENESIS_BLOCK + 8);
+
+            let elements = [];
+            let expectedRoots = [];
+
+            // Add (1)
+            elements.push(createRLPHeader(block1));
+            elements.push(createRLPHeader(block2));
+            elements.push(createRLPHeader(block3));
+            elements.push(createRLPHeader(block4));
+
+            const proofLeaves = elements.map(keccak256);
+            const merkleTree = new MerkleTree(proofLeaves, keccak256);
+            const root = merkleTree.getHexRoot();
+
+            ret = await merklerelay.submitRoot(elements.map(Buffer.from), parentHash, {
+                from: accounts[0],
+                gas: 8000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            
+            expectEvent.inLogs(ret.logs, 'NewRoot', {root: root});
+            parentHash = root;
+            let submitTime = await time.latest();
+            
+            expectedRoots.push({
+                root: {
+                    hash: root,
+                    lastHash: '0x'+keccak256(elements[elements.length-1]).toString('hex'),
+                    number: (await mainWeb3.eth.getBlock(GENESIS_BLOCK+elements.length)).number,
+                    totalDifficulty: (await mainWeb3.eth.getBlock(GENESIS_BLOCK+elements.length)).totalDifficulty,
+                    lengthUpdate: elements.length,
+                    forkId: 0,
+                    iterableIndex: 0,
+                    latestFork: "0x0000000000000000000000000000000000000000000000000000000000000000", // TODO is this correct?
+                    lockedUntil: submitTime.add(LOCK_PERIOD),
+                    submitter: accounts[0],
+                    successors: []
+                },
+            })
+
+            // Add (2)
+            let elementsBis = [];
+            elementsBis.push(createRLPHeader(block5));
+            elementsBis.push(createRLPHeader(block6));
+            elementsBis.push(createRLPHeader(block7));
+            elementsBis.push(createRLPHeader(block8));
+            const requestedBlockInRlp = createRLPHeader(block5);
+
+            const proofLeavesBis = elementsBis.map(keccak256);
+            const merkleTreeBis = new MerkleTree(proofLeavesBis, keccak256);
+            const rootBis = merkleTreeBis.getHexRoot();
+
+            ret = await merklerelay.submitRoot(elementsBis.map(Buffer.from), parentHash, {
+                from: accounts[0],
+                gas: 8000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+            
+            expectEvent.inLogs(ret.logs, 'NewRoot', {root: rootBis});
+
+            const {Value, Path, Nodes} = require("./transactions/genesis.json");
+
+            let proof = merkleTreeBis.getProof(proofLeavesBis[0]);
+            let proofSC = proof.map((el, i) => {return el.position == 'right' ?  {position: true, data: el.data} : {position: false, data: el.data}}); 
+            let position_array = proofSC.map((el,i)=> {return el.position});
+            let data_array = proofSC.map((el, i) => {return el.data});
+
+            const blockProof = {proof: data_array, position: position_array};
+
+            expectedRoots.push(
+                {
+                    root: {
+                        hash: rootBis,
+                        lastHash: '0x'+keccak256(elementsBis[elementsBis.length-1]).toString('hex'),
+                        number: (await mainWeb3.eth.getBlock(GENESIS_BLOCK+elements.length+elementsBis.length)).number,
+                        totalDifficulty: (await mainWeb3.eth.getBlock(GENESIS_BLOCK+elements.length+elementsBis.length)).totalDifficulty,
+                        lengthUpdate: elementsBis.length,
+                        forkId: 0,
+                        iterableIndex: 0,
+                        latestFork: "0x0000000000000000000000000000000000000000000000000000000000000000", // TODO is this correct?
+                        lockedUntil: submitTime.add(LOCK_PERIOD),
+                        submitter: accounts[0],
+                        successors: []
+                    },
+            });
+
+            let balanceSubmitterBeforeCall = await balance.current(submitterAddr);
+            let balanceVerifierBeforeCall = await balance.current(verifierAddr);
+
+            ret = await merklerelay.verifyTransaction(verificationFee, requestedBlockInRlp, 0, Value, Path, Nodes, blockProof, rootBis, {
+                from: verifierAddr,
+                value: verificationFee,
+                gas: 8000000,
+                gasPrice: GAS_PRICE_IN_WEI
+            });
+
+            expectEvent.inLogs(ret.logs, 'VerifyTransaction', {result: new BN(0)});
+
+            let balanceSubmitterAfterCall = await balance.current(submitterAddr);
+            let balanceVerifierAfterCall = await balance.current(verifierAddr);
+            let txCost = (new BN(ret.receipt.gasUsed)).mul(GAS_PRICE_IN_WEI);
+            console.log("Gas used for verifying a transaction: ", ret.receipt.gasUsed);
+
+            expect(balanceSubmitterBeforeCall).to.be.bignumber.equal(balanceSubmitterAfterCall.sub(verificationFee));
+            expect(balanceVerifierBeforeCall).to.be.bignumber.equal(balanceVerifierAfterCall.add(verificationFee).add(txCost));
+            
+            let stake = await merklerelay.getStake({
+                from: submitterAddr
+            });
+            await withdrawStake(stake, submitterAddr);
+        });
+    });
+
     // checks if expectedEndpoints array is correct and if longestChainEndpoints contains hash of block with highest difficulty
     const checkExpectedEndpoints = async (expectedEndpoints) => {
         expect(await merklerelay.getNumberOfForks()).to.be.bignumber.equal(new BN(expectedEndpoints.length));
